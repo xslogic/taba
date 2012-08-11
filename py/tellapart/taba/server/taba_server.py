@@ -164,7 +164,10 @@ class TabaServer(object):
       A list of ((client_id, name), state) tuples.
     """
     # Specific State object - retrieve directly.
-    if names and len(names) == 1 and client_id:
+
+    # ARUN : Add check to see if name is a glob
+    if names and len(names) == 1 and \
+        not misc_util.containsAny(names, '*?[]!') client_id:
       op = self.dao.StateGet(client_id, names[0])
       if op.success and op.response_value[1] is not None:
         states = [op.response_value]

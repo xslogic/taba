@@ -307,6 +307,16 @@ class TabaServerStorageManager(object):
     if client_id:
       clients = [client_id]
 
+    # ARUN : Call TabaNamesForClientGet with glob arg if names is single elem array 
+    #        and elem contains special_glob_chars -- Done
+
+    if names and len(names) == 1 and misc_util.containsAny(names, '*?[]!'):
+      names_op = self.TabaNamesForAllGet(names[0])
+      if not names_op.success:
+        raise Exception('Error retrieving list of Taba Names\n%s' % names_op)
+      names = names_op.response_value
+      
+
     else:
       op = self.ClientIdsGet()
       if not op.success:
@@ -518,7 +528,8 @@ class TabaServerStorageManager(object):
   #  TABA NAMES
   #----------------------------------------------------------------------------
 
-  def TabaNamesForClientGet(self, client_id):
+  # ARUN : Add glob default arg -- Done
+  def TabaNamesForClientGet(self, client_id, glob=None):
     """Retrieve the set of all Taba Names for a Client ID.
 
     Args:
@@ -529,8 +540,10 @@ class TabaServerStorageManager(object):
       field contains the set of Taba Names for the Client ID.
     """
     key = self._MakeKey(KEY_NAMES, client_id)
+
+    # ARUN : pass glob to SetMember function of engine -- Done
     op = self._CheckedOp("retrieving Taba Names for Client %s" % client_id,
-        self.engine.SetMembers, key)
+        self.engine.SetMembers, key, glob)
 
     if op.response_value:
       op.response_value = set(op.response_value)
@@ -584,14 +597,14 @@ class TabaServerStorageManager(object):
 
     return op
 
-  def TabaNamesForAllGet(self):
+  def TabaNamesForAllGet(self, glob=None):
     """Retrieve the set of all Taba Names across all Client IDs.
 
     Returns:
       Operation object with the query results. If successful, the response_value
       field contains the set of Taba Names across all Client ID.
     """
-    return self.TabaNamesForClientGet(ALL_CLIENTS)
+    return self.TabaNamesForClientGet(ALL_CLIENTS, glob)
 
   def TabaNamesForAllAdd(self, names):
     """Add Taba Names to the Set of Taba Names across all Client IDs.

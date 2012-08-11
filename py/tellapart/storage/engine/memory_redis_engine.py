@@ -19,6 +19,8 @@ in-memory.
 
 from tellapart.storage.operation import Operation
 
+import fnmatch
+
 class MemoryRedisEngine(object):
   def __init__(self, endpoints, num_vbuckets):
     """RedisEngine compatible signature.
@@ -164,7 +166,8 @@ class MemoryRedisEngine(object):
 
     return Operation(success=True, response_value=added)
 
-  def SetMembers(self, key):
+  # ARUN : Add glob argument
+  def SetMembers(self, key, glob=None):
     """Retrieve all the members of the Set at key.
 
     Args:
@@ -179,6 +182,9 @@ class MemoryRedisEngine(object):
         return Operation(success=False)
 
       val = self.val_dict[key]
+      # ARUN : if glob not None, return members that match the glob
+      if glob:
+        val = fnmatch.filter(val, glob)
 
     else:
       val = set([])

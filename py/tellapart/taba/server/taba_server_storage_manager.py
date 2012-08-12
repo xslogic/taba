@@ -303,20 +303,20 @@ class TabaServerStorageManager(object):
     Returns:
       Generator that yields values of the form ((client_id, name), state)
     """
-    # Get the set of clients to retrieve.
-    if client_id:
-      clients = [client_id]
-
     # ARUN : Call TabaNamesForClientGet with glob arg if names is single elem array 
     #        and elem contains special_glob_chars -- Done
 
-    if names and len(names) == 1 and misc_util.containsAny(names, '*?[]!'):
+    if names and len(names) == 1 and misc_util.isGlob(names[0]):
       names_op = self.TabaNamesForAllGet(names[0])
       if not names_op.success:
         raise Exception('Error retrieving list of Taba Names\n%s' % names_op)
       names = names_op.response_value
-      
+    # Get the set of clients to retrieve.
 
+
+    if client_id:
+      clients = [client_id]
+      
     else:
       op = self.ClientIdsGet()
       if not op.success:

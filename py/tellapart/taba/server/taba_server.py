@@ -22,6 +22,7 @@ import math
 import random
 import time
 import traceback
+import fnmatch
 
 import cjson
 import gevent
@@ -166,8 +167,7 @@ class TabaServer(object):
     # Specific State object - retrieve directly.
 
     # ARUN : Add check to see if name is a glob
-    if names and len(names) == 1 and \
-        not misc_util.containsAny(names, '*?[]!') client_id:
+    if names and len(names) == 1 and not misc_util.isGlob(names[0]) and client_id:
       op = self.dao.StateGet(client_id, names[0])
       if op.success and op.response_value[1] is not None:
         states = [op.response_value]
@@ -419,11 +419,16 @@ class TabaServer(object):
     Returns:
       List of associated Taba Type identifier string.
     """
-    if not names:
+    # ARUN : check if names is a glob
+    if not names or (len(names) == 1 and misc_util.isGlob(names[0])):
+      old_names = names
       op = self.dao.TabaNamesForAllGet()
       if not op.success:
         raise Exception(op)
       names = op.response_value
+      if old_names: # Not null, which means its a glob
+        names = fnmatch.filter(names, old_names[0])
+      
 
     op = self.dao.TabaTypeGetBatch(names)
     if not op.success:

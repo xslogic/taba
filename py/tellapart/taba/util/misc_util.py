@@ -103,6 +103,10 @@ def MakeStreamLogger(
   return logger
 
 
+def isGlob(str):
+    """Check whether 'str' is a glob expression"""
+    return containsAny(str, '*?[]!')
+
 def containsAny(str, set):
     """Check whether 'str' contains ANY of the chars in 'set'"""
     return 1 in [c in str for c in set]

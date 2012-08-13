@@ -18,18 +18,41 @@ Taba Events from a client application to a Taba Agent.
 """
 
 import time
-
+import threading
 import cjson
 
 from tellapart.taba.taba_event import SerializeEvent
 from tellapart.taba.taba_event import TabaEvent
 from tellapart.taba.taba_type import TabaType
 from tellapart.taba.util import misc_util
-from tellapart.taba.util import thread_util
 
 LOG = misc_util.MakeStreamLogger(__name__)
 
 client = None
+
+class TimedExecutorThread(threading.Thread):
+  """Creates an executor thread that executes the given function with arguments 
+     every 'period_seconds' seconds. 
+
+  Args:
+    period_seconds - How long, in float seconds, to wait between function calls.
+    fn - A Python callable to invoke.
+    *args, **kwargs - The arguments to pass to 'fn'.
+
+  """
+  def __init__(self, period_seconds, fn, *args, **kwargs):
+    self.period_seconds = period_seconds
+    self.func = fn
+    self.args = args
+    self.kwargs = kwargs
+    self.kill_recvd = False
+    threading.Thread.__init__(self)
+
+  def run(self):
+    while not self.kill_recvd:
+      time.sleep(self.period_seconds)
+      self.func(*self.args, **self.kwargs)
+
 
 class TabaClient(object):
   """Class for maintaining and flushing a buffer of Taba Events. This buffer
@@ -78,9 +101,10 @@ class TabaClient(object):
   def Initialize(self):
     """Start periodically flushing the Taba Event buffer.
     """
-    thread_util.ScheduleOperationWithPeriod(
-        self.flush_period,
-        self._Flush)
+    self.flush_thread = TimedExecutorThread(
+                                self.flush_period, 
+                                self._Flush)
+    self.flush_thread.start()
 
   def RecordEvent(self, name, type, value):
     """Create and buffer a Taba Event.
@@ -103,6 +127,12 @@ class TabaClient(object):
         'failures' : self.failures,
         'buffer_size' : len(self.buffer)}
     return cjson.encode(state)
+
+  def Kill(self):
+    """Kills the TimedExecutor Thread. ReInitialization required after this. 
+    """
+    self.flush_thread.kill_recvd = True
+    
 
 class Taba(object):
   """Proxy object for posting events to a specific Taba Name (Tab)"""
@@ -176,3 +206,16 @@ def GetStatus():
     status = client.State()
 
   return status
+
+def Kill():
+  """ Kills the thread that flushes the buffer and nulls the global client
+      Would require re-initialization after this.
+  """
+  global client
+  if not client:
+    return
+  else:
+    client.Kill()
+    client = None
+    return
+    

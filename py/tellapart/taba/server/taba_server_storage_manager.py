@@ -254,19 +254,23 @@ class TabaServerStorageManager(object):
 
     return op
 
-  def StateIteratorForClient(self, client_id):
+  def StateIteratorForClients(self, clients):
     """Generator which iterates over all State objects for a Client ID.
 
     Args:
-      client_id - Client ID string to retrieve State objects for.
+      clients - Client IDs string to retrieve State objects for.
 
     Returns:
       Generator that yields values of the form ((client_id, name), state)
     """
-    op = self.TabaNamesForClientGet(client_id)
-    if not op.success:
-      raise Exception('Error retrieving list of Taba Names\n%s' % op)
-    names = op.response_value
+
+    names = []
+    
+    for client_id in clients:
+      op = self.TabaNamesForClientGet(client_id)
+      if not op.success:
+        raise Exception('Error retrieving list of Taba Names\n%s' % op)
+      names.extend(op.response_value)
 
     state_ids = self._IdsIterator([client_id], names)
 
@@ -291,33 +295,21 @@ class TabaServerStorageManager(object):
 
     return self._StateIteratorForIdTuples(state_ids)
 
-  def StateIteratorForNameList(self, names, client_id=None, by_name=False):
+  def StateIteratorForNameList(self, names, clients=None, by_name=False):
     """Generator which iterates over all state objects for a list of Taba Name.
 
     Args:
       names - List of Taba Name string to retrieve State objects for.
-      client_id - Client ID string to retrieve State objects for.
+      clients - Client IDs string to retrieve State objects for.
       by_name - Group generated States by Taba Name (instead of Client ID, which
           id the default)
 
     Returns:
       Generator that yields values of the form ((client_id, name), state)
     """
-    # ARUN : Call TabaNamesForClientGet with glob arg if names is single elem array 
-    #        and elem contains special_glob_chars -- Done
-
-    if names and len(names) == 1 and misc_util.isGlob(names[0]):
-      names_op = self.TabaNamesForAllGet(names[0])
-      if not names_op.success:
-        raise Exception('Error retrieving list of Taba Names\n%s' % names_op)
-      names = names_op.response_value
     # Get the set of clients to retrieve.
 
-
-    if client_id:
-      clients = [client_id]
-      
-    else:
+    if not clients:
       op = self.ClientIdsGet()
       if not op.success:
         raise Exception('Error retrieving list of Client IDs\n%s' % op)
@@ -528,8 +520,7 @@ class TabaServerStorageManager(object):
   #  TABA NAMES
   #----------------------------------------------------------------------------
 
-  # ARUN : Add glob default arg -- Done
-  def TabaNamesForClientGet(self, client_id, glob=None):
+  def TabaNamesForClientGet(self, client_id):
     """Retrieve the set of all Taba Names for a Client ID.
 
     Args:
@@ -541,9 +532,8 @@ class TabaServerStorageManager(object):
     """
     key = self._MakeKey(KEY_NAMES, client_id)
 
-    # ARUN : pass glob to SetMember function of engine -- Done
     op = self._CheckedOp("retrieving Taba Names for Client %s" % client_id,
-        self.engine.SetMembers, key, glob)
+        self.engine.SetMembers, key)
 
     if op.response_value:
       op.response_value = set(op.response_value)
@@ -597,14 +587,14 @@ class TabaServerStorageManager(object):
 
     return op
 
-  def TabaNamesForAllGet(self, glob=None):
+  def TabaNamesForAllGet(self):
     """Retrieve the set of all Taba Names across all Client IDs.
 
     Returns:
       Operation object with the query results. If successful, the response_value
       field contains the set of Taba Names across all Client ID.
     """
-    return self.TabaNamesForClientGet(ALL_CLIENTS, glob)
+    return self.TabaNamesForClientGet(ALL_CLIENTS)
 
   def TabaNamesForAllAdd(self, names):
     """Add Taba Names to the Set of Taba Names across all Client IDs.

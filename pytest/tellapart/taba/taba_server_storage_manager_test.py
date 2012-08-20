@@ -290,7 +290,7 @@ class TabaServerStorageManagerTestCase(mox.MoxTestBase):
     for tuple in tuples_put:
       self.assertTrue(tuple in vals)
 
-    vals = [v for v in self.vssm.StateIteratorForClient('c1')]
+    vals = [v for v in self.vssm.StateIteratorForClients(['c1'])]
     self.assertEqual(len(vals), 2)
     for tuple in tuples_put[:2]:
       self.assertTrue(tuple in vals)
@@ -325,16 +325,6 @@ class TabaServerStorageManagerTestCase(mox.MoxTestBase):
     op = self.vssm.TabaNamesForClientGet('c2')
     self.assertTrue(op.success)
     self.assertEqual(op.response_value, set(['n1', 'n2', 'n3']))
-
-    # ARUN : Adding test case 1
-    op = self.vssm.TabaNamesForClientGet('c2', '*3')
-    self.assertTrue(op.success)
-    self.assertEqual(op.response_value, set(['n3']))
-
-    # ARUN : Adding test case 2
-    op = self.vssm.TabaNamesForClientGet('c2', 'n[2-3]')
-    self.assertTrue(op.success)
-    self.assertEqual(op.response_value, set(['n2', 'n3']))
 
     op = self.vssm.TabaNamesForClientRemove('c1', ['n1', 'n4'])
     self.assertTrue(op.success)

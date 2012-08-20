@@ -148,16 +148,16 @@ class TabaServer(object):
 
     self._UpdateAppliedLatency(client_id, events)
 
-  def GetStates(self, client_id=None, names=None, name_blocks=None):
+  def GetStates(self, clients=None, names=None, name_blocks=None):
     """Retrieve the raw State object(s). If the client_id or name arguments are
     None or empty then the State(s) are retrieved for all clients or names
     respectively.
 
     Args:
-      client_id - Client ID string to retrieve state objects for. If None or
-          empty, then all clients are retrieved.
-      names - List of Taba Names to retrieve state objects for. If None or
-          empty, then all Taba Names will be retrieved.
+      clients - Client IDs string to retrieve state objects for. If None
+          then all clients are retrieved.
+      names - List of Taba Names to retrieve state objects for. If None
+          then all Taba Names will be retrieved.
       name_block - Taba Name Block to retrieve state objects for. If None or
           empty, then all blocks will be retrieved.
 
@@ -167,24 +167,24 @@ class TabaServer(object):
     # Specific State object - retrieve directly.
 
     # ARUN : Add check to see if name is a glob
-    if names and len(names) == 1 and not misc_util.isGlob(names[0]) and client_id:
-      op = self.dao.StateGet(client_id, names[0])
+    if names and len(names) == 1 and clients and len(clients) == 1:
+      op = self.dao.StateGet(clients[0], names[0])
       if op.success and op.response_value[1] is not None:
         states = [op.response_value]
       else:
         states = []
 
     # Specific Taba Names and Client ID - don't bother distributing.
-    elif names and client_id:
-      states = self.dao.StateIteratorForNameList(names, client_id=client_id)
+    elif names and clients:
+      states = self.dao.StateIteratorForNameList(names, clients=clients)
 
     # Specific Taba Names - don't bother distributing.
     elif names:
       states = self.dao.StateIteratorForNameList(names)
 
     # Specific Client ID - don't bother distributing.
-    elif client_id:
-      states = self.dao.StateIteratorForClient(client_id)
+    elif clients:
+      states = self.dao.StateIteratorForClients(clients)
 
     # Specific Taba Name Blocks - retrieve all States in the Block.
     elif name_blocks is not None:
@@ -196,14 +196,14 @@ class TabaServer(object):
 
     return states
 
-  def GetProjections(self, client_id=None, names=None, name_blocks=None,
+  def GetProjections(self, clients=None, names=None, name_blocks=None,
                      handlers=None):
     """Retrieve the raw Projection object(s). If the client_id or name arguments
     are None or empty then the Projection(s) are retrieved for all clients or
     names respectively.
 
     Args:
-      client_id - Client ID string to retrieve projection objects for. If None
+      clients - Client IDs string to retrieve projection objects for. If None
           or empty, then all clients are retrieved.
       names - List of Taba Name to retrieve projection objects for. if None or
           empty, then all Taba Names will be retrieved.
@@ -216,14 +216,14 @@ class TabaServer(object):
     Returns:
       A list of ((client_id, name), projection) tuples.
     """
-    if not (names or client_id) and name_blocks is None and self.redistribute:
+    if not (names or clients) and name_blocks is None and self.redistribute:
       # Non-specific request - redistribute the request.
       projections = self._DistributeRequestByTabaNameBlock('projection')
       for projection in projections.iteritems():
         yield projection
 
     else:
-      states = self.GetStates(client_id, names, name_blocks)
+      states = self.GetStates(clients, names, name_blocks)
 
       # Get the required Handlers.
       if not handlers:
@@ -252,8 +252,8 @@ class TabaServer(object):
     all Taba Names.
 
     Args:
-      names - List of Taba Name to retrieve Aggregate Projections for. If None
-          or blank, retrieve for all Taba Names.
+      names - List of Taba Name to retrieve Aggregate Projections for. If None, 
+          retrieve for all Taba Names.
       blocks - Taba Name Block to retrieve state objects for. If None or
           empty, then all blocks will be retrieved.
       handlers - Map of {Taba Name: Handler} of pre-fetched handlers. If set,
@@ -325,12 +325,12 @@ class TabaServer(object):
       if aggregate:
         yield (last_name, aggregate)
 
-  def GetRendered(self, client_id=None, names=None, name_blocks=None):
+  def GetRendered(self, clients=None, names=None, name_blocks=None):
     """Retrieve Rendered Tabas. If client_id is specified, render Projections,
     otherwise, render Aggregates.
 
     Args:
-      client_id - Client ID string to product Rendered Tabas for. If specified
+      clients - Client IDs string to product Rendered Tabas for. If specified
           Projections will be rendered, otherwise Aggregates across all Clients
           will be rendered.
       names - List of Taba Name strings to render. If not specified, then all
@@ -345,8 +345,8 @@ class TabaServer(object):
     all_names = self.GetNames()
     handlers = self._GetHandlers(all_names)
 
-    if client_id:
-      to_renders = self.GetProjections(client_id, names, name_blocks, handlers)
+    if clients:
+      to_renders = self.GetProjections(clients, names, name_blocks, handlers)
       to_renders = [(nm, proj) for (_, nm), proj in to_renders]
 
     else:
@@ -419,15 +419,11 @@ class TabaServer(object):
     Returns:
       List of associated Taba Type identifier string.
     """
-    # ARUN : check if names is a glob
-    if not names or (len(names) == 1 and misc_util.isGlob(names[0])):
-      old_names = names
+    if not names:
       op = self.dao.TabaNamesForAllGet()
       if not op.success:
         raise Exception(op)
       names = op.response_value
-      if old_names: # Not null, which means its a glob
-        names = fnmatch.filter(names, old_names[0])
       
 
     op = self.dao.TabaTypeGetBatch(names)

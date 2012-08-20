@@ -378,8 +378,7 @@ class RedisEngine(object):
 
     return self._ShardedOp([(key, val) for val in values], _ShardSetAdd)
 
-  # ARUN : Add glob argument
-  def SetMembers(self, key, glob=None):
+  def SetMembers(self, key):
     """Retrieve all the members of the Set at key.
 
     Args:
@@ -391,9 +390,6 @@ class RedisEngine(object):
     """
     def _ShardSetMembers(shard, keys, vkeys, values):
       members = shard.smembers(vkeys[0])
-      # ARUN : if glob not None, return members that match the glob
-      if glob:
-        members = fnmatch.filter(members, glob)
       return Operation(success=True, response_value=[members])
 
     op = self._ShardedOp([(key, None)], _ShardSetMembers)

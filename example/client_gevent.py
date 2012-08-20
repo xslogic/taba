@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time 
-import sys
-from tellapart.taba.client import taba_client
+from gevent import monkey
+monkey.patch_all()
+
+import gevent
+from tellapart.taba.client.gevent import taba_client
 
 taba_client.Initialize('test_client1', 'http://localhost:8280/post')
 taba_client.RecordValue('test_name', (100, ))
@@ -24,9 +26,8 @@ taba_client.RecordValue('test_name', (1000, ))
 taba_client.RecordValue('test_name1', (1000, ))
 taba_client.RecordValue('test_name2', (1000, ))
 
-time.sleep(1)
+gevent.sleep(1)
 taba_client.Flush()
-taba_client.Kill()
 
 taba_client.Initialize('test_client2', 'http://localhost:8280/post')
 taba_client.RecordValue('test_name3', (100, ))
@@ -36,8 +37,7 @@ taba_client.RecordValue('test_name3', (1000, ))
 taba_client.RecordValue('test_name4', (1000, ))
 taba_client.RecordValue('test_name5', (1000, ))
 
-time.sleep(1)
+gevent.sleep(1)
 taba_client.Flush()
-taba_client.Kill()
 
-sys.exit()
+

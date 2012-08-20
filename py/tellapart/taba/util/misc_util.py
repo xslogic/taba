@@ -29,6 +29,7 @@ import urllib2
 
 import cjson
 
+
 class Bunch(object):
   """A simple container for named fields/values that acts like a class.
   """
@@ -103,17 +104,17 @@ def MakeStreamLogger(
   return logger
 
 
-def isGlob(str):
+def isGlob(word):
     """Check whether 'str' is a glob expression"""
     return containsAny(str, '*?[]!')
 
-def containsAny(str, set):
+def containsAny(word, charSet):
     """Check whether 'str' contains ANY of the chars in 'set'"""
-    return 1 in [c in str for c in set]
+    return any([c in word for c in charSet])
 
-def containsAll(str, set):
+def containsAll(word, charSet):
     """Check whether 'str' contains ALL of the chars in 'set'"""
-    return 0 not in [c in str for c in set]
+    return all([c in word for c in charSet])
 
 class HandlerSpec(object):
   """A HTTP request handler specification.

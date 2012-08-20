@@ -23,6 +23,7 @@ import zlib
 
 import cjson
 import gevent
+import fnmatch
 
 from tellapart.taba.util import misc_util
 from tellapart.taba.taba_event import TABA_EVENT_IDX_VALUE
@@ -31,6 +32,14 @@ from tellapart.third_party import juno
 LOG = misc_util.MakeStreamLogger(__name__)
 
 global_taba_server = None
+
+class Param:
+  """ Encapsulates certain metadata of a parameter, such as if its a glob 
+  """
+  def __init__(self, value, isGlob):
+    self.value = value
+    self.isGlob = isGlob
+
 
 def TimedLoggedRequest(request_name):
   """Decorator for Juno request handlers that logs their parameters and
@@ -165,7 +174,9 @@ def HandleGetRaw(request):
 
   Get Parameters:
     client - Client ID to get State objects for, or blank for all Clients IDs.
+    client_glob - Client ID to get State objects for.
     taba - Taba Name to get State objects for, or blank for all Taba Names.
+    taba_glob - Taba Glob to get State objects for.
     block - Taba Name Block ID to get State objects for, or blank for all.
 
   Response:
@@ -180,15 +191,33 @@ def HandleGetRaw(request):
   name = request.input('taba')
   block = request.input('block')
 
-  if name and block:
+  # ARUN : add glob params for taba and client
+  name_glob = request.input('taba_glob')
+  client_glob = request.input('client_glob')  
+
+  if (name or name_glob) and block:
     juno.status(400)
     juno.append('Cannot specify both "taba" and "block"')
+    return
+ 
+  # ARUN : add rule.. only one of taba or taba_glob 
+  if name and name_glob:
+    juno.status(400)
+    juno.append('Cannot specify both "taba_glob" and "taba"')
+    return
+
+  # ARUN : add rule.. only one of client_id or client_glob 
+  if client_id and client_glob:
+    juno.status(400)
+    juno.append('Cannot specify both "client_glob" and "client"')
     return
 
   blocks = block.split(',') if block else None
   names = [name] if name else None
+  names_param = Param(name_glob, True) if name_glob else Param(names, False)
+  clients_param = Param(client_glob, True) if client_glob else Param(client_id, False)
 
-  return _RawResponse(client_id, names, blocks, _GetAccept(request))
+  return _RawResponse(clients_param, names_param, blocks, _GetAccept(request))
 
 @TimedLoggedRequest("Get Raw Batch")
 def HandleGetRawBatch(request):
@@ -196,7 +225,7 @@ def HandleGetRawBatch(request):
 
   Post Body - a JSON dictionary with the following fields:
     client - Client ID to get State objects or, or blank for all.
-    taba - List of Taba Names to get State objects for, or blank for all.
+    taba - Taba Name to get State objects for, or blank for all Taba Names.
     block - List of Taba Name Block IDs to get State objects, or blank for all.
 
   Response:
@@ -219,19 +248,28 @@ def HandleGetRawBatch(request):
     juno.append('Cannot specify both "names" and "block"')
     return
 
-  return _RawResponse(client_id, names, blocks, _GetAccept(request))
+  return _RawResponse(Param(client_id, False), Param(names, False), blocks, _GetAccept(request))
 
-def _RawResponse(client_id, names, blocks, accept):
+def _RawResponse(clients_param, names_param, blocks, accept):
   """Retrieve raw State results, and add them to the response.
 
   Args:
-    client_id - Client ID string to retrieve State objects for.
-    names - List of Taba Names to retrieve State objects for.
+    clients_param - Param object containing either client_id or client glob 
+                    to retrieve State objects for.
+    names_param - Param object containing either names - List of Taba Names, or a names_glob 
+                  to retrieve State objects for.
     blocks - List of Taba Name Block IDs to retrieve State objects for.
     accept - MIME type in which to format the output.
   """
-  # Get the requested State objects.
-  states = global_taba_server.GetStates(client_id, names, blocks)
+
+  clients, names = _GetClientsAndNames(clients_param, names_param)
+
+  if (clients != None and len(clients) == 0) \
+      or (names != None and len(names) == 0):
+    states = []
+  else:
+    # Get the requested State objects.
+    states = global_taba_server.GetStates(clients, names, blocks)
 
   # Format the response in accordance with the Accept header.
   if accept == 'text/json':
@@ -249,7 +287,9 @@ def HandleGetProjection(request):
 
   Get Parameters:
     client - Client ID to get Projection(s) for, or blank for all Clients IDs.
+    client_glob - Client ID to get Projection(s) for.
     taba - Taba Name to get Projection(s) for, or blank for all Taba Names.
+    taba_glob - Taba Glob to get Projection(s) for.
     block - Taba Name Block to get Projections for, or blank for all.
 
   Response:
@@ -264,15 +304,34 @@ def HandleGetProjection(request):
   name = request.input('taba')
   block = request.input('block')
 
-  if name and block:
+
+  # ARUN : add glob params for taba and client
+  name_glob = request.input('taba_glob')
+  client_glob = request.input('client_glob')  
+
+  if (name or name_glob) and block:
     juno.status(400)
     juno.append('Cannot specify both "taba" and "block"')
+    return
+ 
+  # ARUN : add rule.. only one of taba or taba_glob 
+  if name and name_glob:
+    juno.status(400)
+    juno.append('Cannot specify both "taba_glob" and "taba"')
+    return
+
+  # ARUN : add rule.. only one of client_id or client_glob 
+  if client_id and client_glob:
+    juno.status(400)
+    juno.append('Cannot specify both "client_glob" and "client"')
     return
 
   blocks = block.split(',') if block else None
   names = [name] if name else None
+  names_param = Param(name_glob, True) if name_glob else Param(names, False)
+  clients_param = Param(client_glob, True) if client_glob else Param(client_id, False)
 
-  return _ProjectionResponse(client_id, names, blocks, _GetAccept(request))
+  return _ProjectionResponse(clients_param, names_param, blocks, _GetAccept(request))
 
 @TimedLoggedRequest("Get Projection Batch")
 def HandleGetProjectionBatch(request):
@@ -303,19 +362,28 @@ def HandleGetProjectionBatch(request):
     juno.append('Cannot specify both "taba" and "block"')
     return
 
-  return _ProjectionResponse(client_id, names, blocks, _GetAccept(request))
+  return _ProjectionResponse(Param(client_id, False), Param(names, False), blocks, _GetAccept(request))
 
-def _ProjectionResponse(client_id, names, blocks, accept):
+def _ProjectionResponse(clients_param, names_param, blocks, accept):
   """Retrieve Projection results, and add them to the response.
 
   Args:
-    client_id - Client ID string to retrieve Projections for.
-    names - List of Taba Names to retrieve Projections for.
+    clients_param - Param object containing either client_id or client glob 
+                    to retrieve Projections for.
+    names_param - Param object containing either names - List of Taba Names, or a names_glob 
+                  to retrieve Projections for.
     blocks - List of Taba Name Block IDs to retrieve Projections for.
     accept - MIME type in which to format the output.
   """
-  # Retrieve the requested Projections.
-  projections = global_taba_server.GetProjections(client_id, names, blocks)
+  clients, names = _GetClientsAndNames(clients_param, names_param)
+
+  if (clients != None and len(clients) == 0) \
+      or (names != None and len(names) == 0):
+    projections = []
+
+  else:
+    # Retrieve the requested Projections.
+    projections = global_taba_server.GetProjections(clients, names, blocks)
 
   # Render the Projection objects according to the requested format.
   if accept == 'text/json':
@@ -345,16 +413,25 @@ def HandleGetAggregate(request):
   # Parse and validate query parameters.
   name = request.input('taba')
   block = request.input('block')
+  
+  name_glob = request.input('taba_glob')
 
   if name and block:
     juno.status(400)
     juno.append('Cannot specify both "taba" and "block"')
     return
 
+  # ARUN : add rule.. only one of taba or taba_glob 
+  if name and name_glob:
+    juno.status(400)
+    juno.append('Cannot specify both "taba_glob" and "taba"')
+    return
+
   names = [name] if name else None
   blocks = block.split(',') if block else None
 
-  return _AggregateResponse(names, blocks, _GetAccept(request))
+  names_param = Param(name_glob, True) if name_glob else Param(names, False)
+  return _AggregateResponse(names_param, blocks, _GetAccept(request))
 
 @TimedLoggedRequest("Get Aggregate Batch")
 def HandleGetAggretateBatch(request):
@@ -383,7 +460,7 @@ def HandleGetAggretateBatch(request):
     juno.append('Cannot specify both "taba" and "block"')
     return
 
-  return _AggregateResponse(names, blocks, _GetAccept(request))
+  return _AggregateResponse(Param(names, False), blocks, _GetAccept(request))
 
 def _AggregateResponse(names, blocks, accept):
   """Retrieve Aggregate results, and add them to the response.
@@ -394,8 +471,17 @@ def _AggregateResponse(names, blocks, accept):
     accept - MIME type in which to format the output.
 
   """
-  # Retrieve the requested Aggregates.
-  aggregates = global_taba_server.GetAggregates(names, blocks)
+  names = names_param.value
+
+  if names_param.isGlob:
+    all_names = []
+    names = fnmatch.filter(global_taba_server.GetNames(), names_param.value)
+
+  if names != None and len(names) == 0:
+    aggregates = []
+
+  else: # Retrieve the requested Aggregates.
+    aggregates = global_taba_server.GetAggregates(names, blocks)
 
   # Format the response in accordance to the Accept header.
   if accept == 'text/json':
@@ -424,22 +510,48 @@ def HandleGetTaba(request):
     text/json - JSON serialized.
   """
   # Parse and validate query parameters.
+
   client_id = request.input('client')
   name = request.input('taba')
   block = request.input('block')
 
-  if name and block:
+  # ARUN : add glob params for taba and client
+  name_glob = request.input('taba_glob')
+  client_glob = request.input('client_glob')  
+
+  if (name or name_glob) and block:
     juno.status(400)
     juno.append('Cannot specify both "taba" and "block"')
     return
+ 
+  # ARUN : add rule.. only one of taba or taba_glob 
+  if name and name_glob:
+    juno.status(400)
+    juno.append('Cannot specify both "taba_glob" and "taba"')
+    return
+
+  # ARUN : add rule.. only one of client_id or client_glob 
+  if client_id and client_glob:
+    juno.status(400)
+    juno.append('Cannot specify both "client_glob" and "client"')
+    return
+
+  blocks = block.split(',') if block else None
+  names = [name] if name else None
+  names_param = Param(name_glob, True) if name_glob else Param(names, False)
+  clients_param = Param(client_glob, True) if client_glob else Param(client_id, False)
 
   LOG.info("Starting Get Taba (%s, %s, %s)" % (client_id, name, block))
   start = time.time()
 
-  blocks = block.split(',') if block else None
-  names = [name] if name else None
+  clients, names = _GetClientsAndNames(clients_param, names_param)
 
-  renders = global_taba_server.GetRendered(client_id, names, blocks)
+  if (clients != None and len(clients) == 0) \
+      or (names != None and len(names) == 0):
+    renders = []
+
+  else:
+    renders = global_taba_server.GetRendered(clients, names, blocks)
 
   # Render the Projection objects according to the requested format.
   accept = request.raw.get('HTTP_ACCEPT') or 'text/plain'
@@ -454,6 +566,33 @@ def HandleGetTaba(request):
 
   LOG.info("Finished Get Taba (%s, %s, %s) (%.2f)" % \
       (client_id, name, block, time.time() - start))
+
+
+def _GetClientsAndNames(clients_param, names_param):
+  clients = clients_param.value
+  names = names_param.value
+
+  # Ensure clients is either a list or None
+  if clients_param.isGlob:
+    all_clients = global_taba_server.GetClients()
+    clients = fnmatch.filter(all_clients, clients_param.value)
+
+  else:
+    if clients_param.value:
+      clients = [clients_param.value]
+    
+  if names_param.isGlob:
+    all_names = []
+    if clients:
+      for x in clients:
+        all_names.extend(global_taba_server.GetNamesForClient(x))
+      names = fnmatch.filter(all_names, names_param.value)
+
+    else:
+      names = fnmatch.filter(global_taba_server.GetNames(), names_param.value)
+
+  return clients, names  
+
 
 def HandleGetClients(request):
   """Juno request handler to retrieve all the Client IDs.
@@ -513,7 +652,8 @@ def HandleGetType(request):
   """Juno request handler to retrieve the Taba Type for a Taba Name.
 
   Get Parameters:
-    taba - (Required) The Taba Name to retrieve the Taba Type for.
+    taba - The Taba Name to retrieve the Taba Type for.
+    taba_glob - Glob for the Taba Name (One of the above is required)
 
   Response:
     Taba Type, serialized depending on the Accept MIME type.
@@ -523,8 +663,17 @@ def HandleGetType(request):
     text/json - JSON serialized.
   """
   name = request.input('taba')
+  name_glob = request.input('taba_glob')
+
+  if name and name_glob:
+    juno.status(400)
+    juno.append('Cannot specify both "taba_glob" and "taba"')
+    return
+
   if name:
     names = [name]
+  elif name_glob:
+    names = fnmatch.filter(global_taba_server.GetNames(), name_glob)
   else:
     names = None
 

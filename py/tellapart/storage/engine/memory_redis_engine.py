@@ -166,8 +166,7 @@ class MemoryRedisEngine(object):
 
     return Operation(success=True, response_value=added)
 
-  # ARUN : Add glob argument
-  def SetMembers(self, key, glob=None):
+  def SetMembers(self, key):
     """Retrieve all the members of the Set at key.
 
     Args:
@@ -182,9 +181,6 @@ class MemoryRedisEngine(object):
         return Operation(success=False)
 
       val = self.val_dict[key]
-      # ARUN : if glob not None, return members that match the glob
-      if glob:
-        val = fnmatch.filter(val, glob)
 
     else:
       val = set([])

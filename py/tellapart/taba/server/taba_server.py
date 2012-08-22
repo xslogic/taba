@@ -166,7 +166,7 @@ class TabaServer(object):
     """
     # Specific State object - retrieve directly.
 
-    # ARUN : Add check to see if name is a glob
+    # Add check to see if name is a glob
     if names and len(names) == 1 and clients and len(clients) == 1:
       op = self.dao.StateGet(clients[0], names[0])
       if op.success and op.response_value[1] is not None:
